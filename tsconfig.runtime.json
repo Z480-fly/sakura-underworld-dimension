@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "rootDir": "src/runtime",
+    "outDir": "build/addon/SakuraUnderworldBP/scripts"
+  },
+  "include": ["src/runtime/**/*.ts"],
+  "exclude": ["src/runtime/**/*.test.ts"]
+}
