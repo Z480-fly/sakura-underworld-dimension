@@ -24,6 +24,7 @@ import { openUnderworldSource } from "../mcworld/source.ts";
 import { detectOrder } from "../mcworld/detect.ts";
 import { ADDON, PATHS, TILE_HEIGHT, TILE_SIZE } from "./config.ts";
 import { fetchSourceWorld } from "./fetch-source.ts";
+import { remapEntry, replacementNames } from "./remap.ts";
 
 interface TileProbe {
   x: number;
@@ -50,6 +51,12 @@ interface ExtractedTile {
   probe: TileProbe;
 }
 
+export interface ExtractedRemap {
+  from: string;
+  to: string[];
+  blocks: number;
+}
+
 export interface ExtractManifest {
   source: { repository: string; path: string; sha256: string; commit: string | null };
   order: BlockOrder;
@@ -57,6 +64,8 @@ export interface ExtractManifest {
   realm: { minX: number; maxX: number; minZ: number; maxZ: number };
   spawn: { x: number; y: number; z: number };
   totals: { tiles: number; cells: number; blocks: number; structureBytes: number };
+  /** Falling blocks that were written as a standing block instead. */
+  remap: ExtractedRemap[];
   tiles: ExtractedTile[];
 }
 
@@ -89,6 +98,7 @@ export async function extractTiles(): Promise<void> {
   const cells = new Uint16Array(TILE_COLUMNS * worldHeight);
 
   const tiles: ExtractedTile[] = [];
+  const remappedBlocks = new Map<string, number>();
   let totalCells = 0;
   let totalBlocks = 0;
   let totalBytes = 0;
@@ -105,7 +115,7 @@ export async function extractTiles(): Promise<void> {
       let minY = worldHeight;
       let maxY = -1;
       let blocks = 0;
-      const localPaletteIndex = new Map<number, number>();
+      const localPaletteIndex = new Map<string, number>();
 
       for (let cx = x0 >> 4; cx <= (x0 + TILE_SIZE - 1) >> 4; cx++) {
         for (let cz = z0 >> 4; cz <= (z0 + TILE_SIZE - 1) >> 4; cz++) {
@@ -123,11 +133,16 @@ export async function extractTiles(): Promise<void> {
                   const tx = wx - x0;
                   if (tx < 0 || tx >= TILE_SIZE) continue;
                   const index = sub.ids[packedIndex(order, lx, ly, lz)];
-                  const entry = index === undefined ? undefined : sub.palette[index];
-                  if (!entry || entry.name === "minecraft:air") continue;
-                  let paletteSlot = localPaletteIndex.get(index);
+                  const sourceEntry = index === undefined ? undefined : sub.palette[index];
+                  if (!sourceEntry || sourceEntry.name === "minecraft:air") continue;
+                  // Falling blocks never reach the tile as themselves - see remap.ts.
+                  const entry = remapEntry(sourceEntry, wx, y, wz);
+                  if (entry !== sourceEntry) {
+                    remappedBlocks.set(sourceEntry.name, (remappedBlocks.get(sourceEntry.name) ?? 0) + 1);
+                  }
+                  const key = blockStateKey(entry);
+                  let paletteSlot = localPaletteIndex.get(key);
                   if (paletteSlot === undefined) {
-                    const key = blockStateKey(entry);
                     let shared = paletteIndex.get(key);
                     if (shared === undefined) {
                       shared = palette.length;
@@ -135,7 +150,7 @@ export async function extractTiles(): Promise<void> {
                       paletteIndex.set(key, shared);
                     }
                     paletteSlot = shared;
-                    localPaletteIndex.set(index, shared);
+                    localPaletteIndex.set(key, shared);
                   }
                   cells[tx * worldHeight * TILE_SIZE + y * TILE_SIZE + tz] = paletteSlot + 1;
                   blocks++;
@@ -250,6 +265,9 @@ export async function extractTiles(): Promise<void> {
     realm: { minX, maxX, minZ, maxZ },
     spawn,
     totals: { tiles: tiles.length, cells: totalCells, blocks: totalBlocks, structureBytes: totalBytes },
+    remap: [...remappedBlocks]
+      .map(([from, blocks]) => ({ from, to: replacementNames(from), blocks }))
+      .sort((a, b) => b.blocks - a.blocks),
     tiles,
   };
   await mkdir(PATHS.dist, { recursive: true });
@@ -260,6 +278,9 @@ export async function extractTiles(): Promise<void> {
     `[extract] ${tiles.length} tiles, ${totalBlocks} blocks, ${totalCells} cells, ` +
       `${(totalBytes / 1024 / 1024).toFixed(2)} MB of structure data`,
   );
+  for (const [from, blocks] of remappedBlocks) {
+    console.log(`[extract] ${blocks} falling ${from} written as ${replacementNames(from).join(" / ")}`);
+  }
   console.log(`[extract] spawn ${JSON.stringify(spawn)}`);
 }
 
