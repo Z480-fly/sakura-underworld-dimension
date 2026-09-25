@@ -114,6 +114,24 @@ export async function verifyAddon(): Promise<void> {
     "bp manifest",
     "the behavior pack does not depend on @minecraft/server",
   );
+  // Both packs ship as one release and the behavior pack pins the resource pack
+  // by version. Bumping only one of them leaves Minecraft resolving the older
+  // cached pack, which is what makes a rebuilt add-on look unchanged in game.
+  const bpVersion = bpManifest?.header?.version?.join(".");
+  const rpVersion = rpManifest?.header?.version?.join(".");
+  report.check(
+    bpVersion !== undefined && bpVersion === rpVersion,
+    "manifests",
+    `the packs carry different versions: bp ${bpVersion ?? "?"}, rp ${rpVersion ?? "?"}`,
+  );
+  const pinnedRp = (bpManifest?.dependencies ?? []).find(
+    (dependency) => dependency.uuid === rpManifest?.header?.uuid,
+  )?.version;
+  report.check(
+    Array.isArray(pinnedRp) && pinnedRp.join(".") === rpVersion,
+    "manifests",
+    `the behavior pack pins the resource pack at ${JSON.stringify(pinnedRp)}, not ${rpVersion ?? "?"}`,
+  );
 
   // ---- dimension, biome, item ---------------------------------------------
   const dimension = parseJson<{ "minecraft:dimension"?: { description?: { identifier?: string } } }>(
