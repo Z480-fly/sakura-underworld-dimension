@@ -1,0 +1,11 @@
+{
+  "repository": "Z480-fly/unstable-underworld-bedrock",
+  "path": "dist/Underworld-Simulator-Remastered.mcworld",
+  "branch": "main",
+  "downloadUrl": "https://raw.githubusercontent.com/Z480-fly/unstable-underworld-bedrock/main/dist/Underworld-Simulator-Remastered.mcworld",
+  "commit": "2f7d88f2c7509e27c095a9f13dff168a38352d94",
+  "bytes": 1652518,
+  "sha256": "c70c69b0a1ae8f69a8770db601034029f288935ab8b24490f5ec9777a1497b11",
+  "fetchedAt": "2026-09-25T12:02:41.109Z",
+  "localOverride": null
+}

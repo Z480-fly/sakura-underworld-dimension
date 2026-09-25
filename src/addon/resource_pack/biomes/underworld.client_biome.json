@@ -1,0 +1,19 @@
+{
+  "format_version": "1.26.50",
+  "minecraft:client_biome": {
+    "description": {
+      "identifier": "sakura:underworld"
+    },
+    "components": {
+      "minecraft:sky_color": {
+        "sky_color": "#140f18"
+      },
+      "minecraft:fog_appearance": {
+        "fog_identifier": "minecraft:fog_the_end"
+      },
+      "minecraft:water_appearance": {
+        "surface_color": "#16232c"
+      }
+    }
+  }
+}

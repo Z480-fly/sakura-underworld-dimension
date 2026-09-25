@@ -1,0 +1,26 @@
+{
+  "name": "sakura-underworld-dimension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minecraft Bedrock add-on that adds a Sakura Underworld custom dimension built from the existing Underworld world in Z480-fly/unstable-underworld-bedrock",
+  "scripts": {
+    "typecheck": "tsc -b --noEmit",
+    "test": "bun test",
+    "fetch:source": "bun run src/pipeline/fetch-source.ts",
+    "probe": "bun run src/pipeline/probe.ts",
+    "extract": "bun run src/pipeline/extract-tiles.ts",
+    "runtime": "tsc -p tsconfig.runtime.json",
+    "assemble": "bun run src/pipeline/build-addon.ts",
+    "verify": "bun run src/pipeline/verify.ts",
+    "build:addon": "bun run src/pipeline/build.ts"
+  },
+  "dependencies": {
+    "classic-level": "^3.0.0"
+  },
+  "devDependencies": {
+    "@minecraft/server": "^2.10.0",
+    "@types/bun": "^1.4.2",
+    "typescript": "^5.9.2"
+  }
+}

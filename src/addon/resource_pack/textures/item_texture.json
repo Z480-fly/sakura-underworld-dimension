@@ -1,0 +1,9 @@
+{
+  "resource_pack_name": "sakura_underworld_dimension",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "sakura_enchanted_echo_shard": {
+      "textures": "textures/items/echo_shard"
+    }
+  }
+}
