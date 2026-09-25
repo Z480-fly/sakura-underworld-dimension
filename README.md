@@ -65,7 +65,9 @@ So the build:
 
 At runtime the script places those tiles once, nearest the spawn first, and remembers which
 are done in a world dynamic property. Placed blocks live in the dimension's saved data, so
-the Underworld is persistent and fully buildable like any other blocks.
+the Underworld is persistent and fully buildable like any other blocks - and a world that an
+older version of the pack has already filled keeps the terrain it was filled with (see
+[Re-importing a newer pack](#re-importing-a-newer-pack-into-a-world-that-already-has-an-underworld)).
 
 ### Subchunk ordering (why the tiles are *not* laid out the way the file is)
 
@@ -100,18 +102,25 @@ index→block cache quietly renames whole rock layers (it resolved a later subch
 earlier subchunk's palette entry). The tiles are resolved per subchunk, which is what makes the
 result match the source world block for block.
 
-### Falling blocks are written as black glass
+### Falling blocks are written as green stained glass
 
-A structure is placed block by block, so a gravity block placed that way starts falling before the
-terrain that should hold it up exists. `minecraft:gravel` is 238 334 of the world's 4 029 593
-blocks and sits right through the island, so the first cut of the Underworld arrived with its
-gravel already dropped and left gaps behind.
+Gravity blocks do not stay where they are put. Gravel, the sands and concrete powder each carry a
+falling-block component: every tick an unsupported one becomes a falling block entity and drops
+until something holds it up. A `.mcstructure` is written into the world **block by block**, so a
+gravity block is placed, finds nothing beneath it yet - the terrain that supports it is still being
+written - and drops out of the tile before the rest of the tile exists. That is what made the first
+cut of the Underworld arrive with its gravel already fallen and gaps where it used to be:
+`minecraft:gravel` alone is 238 334 of the world's 4 029 593 blocks (5.9%), spread right through
+the island.
 
-The extraction now writes every falling block as `minecraft:black_stained_glass`, with
-`minecraft:tinted_glass` mixed in - dark glass that belongs to the obsidian / deepslate / blackstone
-palette the world is already built from, and that cannot fall. The choice is made from the block's
-own coordinates, so the same world always produces byte-identical tiles. `src/pipeline/remap.ts`
-holds the table, and `bun run verify` fails the build if any falling block is still present.
+The fix is to never write a gravity block into a tile at all. Every one of them -
+`minecraft:gravel`, `minecraft:sand`, `minecraft:red_sand` and all sixteen `*_concrete_powder`
+blocks - is written as **`minecraft:green_stained_glass`** instead. Stained glass has no
+falling-block component, so it stays exactly where the tile puts it and the terrain loads in whole;
+it also reads clearly against the obsidian / deepslate / blackstone palette the world is built from.
+`src/pipeline/remap.ts` holds the table (weighted, so a mix is a one-line change - it currently
+holds a single block), and `bun run verify` fails the build if a falling block is still in any tile
+palette.
 
 ## Enchanted Echo Shard
 
@@ -178,7 +187,7 @@ src/mcworld/inspect-mcstructure.ts .mcstructure validator
 src/pipeline/fetch-source.ts      downloads the existing Underworld world
 src/pipeline/probe.ts             diagnostics for the subchunk ordering
 src/pipeline/extract-tiles.ts     world → structure tiles + runtime tile list
-src/pipeline/remap.ts             falling blocks → black glass
+src/pipeline/remap.ts             falling blocks → green stained glass
 src/pipeline/build-addon.ts       assembles the .mcaddon
 src/pipeline/verify.ts            proves the world is in the package
 src/runtime/main.ts               behavior pack script (shard + dimension filling)
@@ -198,9 +207,9 @@ the source world:
 [verify] source world: Z480-fly/unstable-underworld-bedrock/dist/Underworld-Simulator-Remastered.mcworld
 [verify]              sha256 c70c69b0a1ae8f69a8770db601034029f288935ab8b24490f5ec9777a1497b11
 [verify] subchunk ordering: generator
-[verify] 238334 falling minecraft:gravel written as minecraft:black_stained_glass / minecraft:tinted_glass
+[verify] 238334 falling minecraft:gravel written as minecraft:green_stained_glass
 [verify] 71 tiles, 4029593 blocks in 12660736 structure cells
-[verify] OK - 27 checks passed, the Underworld world is in the package
+[verify] OK - 29 checks passed, the Underworld world is in the package
 ```
 
 ## In-game status
@@ -208,5 +217,26 @@ the source world:
 The pack has been run in Minecraft Bedrock on a phone with Beta APIs on: the dimension registers,
 the terrain arrives, the shard teleports both ways and the icon carries the enchantment glint.
 Two things that round turned up are fixed here - the gravel that fell out of the tiles while they
-loaded, and the item being refused by the off-hand slot - and they are the only behaviour that
-changed.
+loaded, and the item being refused by the off-hand slot.
+
+### Re-importing a newer pack into a world that already has an Underworld
+
+Blocks that have been placed are part of the dimension's **saved data**, and the tiles the script
+has already filled are remembered in a world dynamic property. A world that an older version of the
+pack has already filled therefore keeps the terrain it was filled with, gravel and all: new tiles
+are never laid on top of it. That is the usual reason a rebuilt add-on looks unchanged in game.
+
+So a new block choice only shows on a world whose Underworld has not been filled yet:
+
+1. copy the world (or start a fresh one) so the Underworld region is untouched;
+2. enable **Settings → Experiments → Beta APIs** and reload;
+3. use the shard, or run `/sakura:enter_underworld`.
+
+Tiles whose probe block the script cannot re-confirm are placed again automatically, so a world
+filled by the very first version does pick up some of the new blocks - but a clean world is the only
+way to be certain every tile is the new build.
+
+Each pack's version also has to change for every release: Minecraft matches a pack by UUID **and
+version**, so re-importing a build that still says `1.0.0` can leave the world on the copy it already
+has. Both manifests carry the version and `bun run verify` fails the build if the behavior pack and
+the resource pack disagree.

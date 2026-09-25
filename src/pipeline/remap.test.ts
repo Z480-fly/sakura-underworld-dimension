@@ -1,17 +1,22 @@
 import { describe, expect, test } from "bun:test";
 import type { BlockStateEntry } from "../mcworld/subchunk.ts";
-import { GRAVITY_BLOCKS, GRAVITY_BLOCK_REPLACEMENTS, remapEntry, replacementFor, replacementNames } from "./remap.ts";
+import {
+  GRAVITY_BLOCKS,
+  GRAVITY_BLOCK_REPLACEMENTS,
+  GREEN_STAINED_GLASS,
+  remapEntry,
+  replacementFor,
+  replacementNames,
+} from "./remap.ts";
 
 const gravel: BlockStateEntry = { name: "minecraft:gravel", states: new Map(), version: 18163713 };
 
 describe("falling block remap", () => {
-  test("swaps gravel for black glass and leaves everything else alone", () => {
+  test("swaps gravel for green stained glass and leaves everything else alone", () => {
     expect(replacementFor("minecraft:deepslate", 1, 2, 3)).toBeUndefined();
     expect(remapEntry(gravel, 1, 2, 3)).not.toBe(gravel);
-    expect(replacementNames("minecraft:gravel")).toEqual([
-      "minecraft:black_stained_glass",
-      "minecraft:tinted_glass",
-    ]);
+    expect(replacementNames("minecraft:gravel")).toEqual([GREEN_STAINED_GLASS]);
+    expect(replacementFor("minecraft:gravel", 1, 2, 3)).toBe(GREEN_STAINED_GLASS);
     const deepslate: BlockStateEntry = { name: "minecraft:deepslate", states: new Map(), version: 0 };
     expect(remapEntry(deepslate, 1, 2, 3)).toBe(deepslate);
   });
@@ -23,14 +28,14 @@ describe("falling block remap", () => {
     expect(replacementNames("minecraft:gravel")).toContain(first.name);
   });
 
-  test("mixes both glass blocks over a volume rather than picking one", () => {
+  test("writes green stained glass everywhere, not a mix", () => {
     const names = new Set<string>();
     for (let x = 0; x < 32; x++) {
       for (let y = 0; y < 32; y++) {
         for (let z = 0; z < 32; z++) names.add(remapEntry(gravel, x, y, z).name);
       }
     }
-    expect([...names].sort()).toEqual(["minecraft:black_stained_glass", "minecraft:tinted_glass"]);
+    expect([...names]).toEqual([GREEN_STAINED_GLASS]);
   });
 
   test("drops the source block's states, which the replacement does not share", () => {
@@ -45,8 +50,35 @@ describe("falling block remap", () => {
   });
 
   test("covers every gravity block the verifier refuses to package", () => {
+    // Sand, red sand, gravel and all sixteen concrete powders drop when placed
+    // into a structure, so all of them have to be written as something else.
+    expect(GRAVITY_BLOCKS).toContain("minecraft:gravel");
+    expect(GRAVITY_BLOCKS).toContain("minecraft:sand");
+    expect(GRAVITY_BLOCKS).toContain("minecraft:red_sand");
+    for (const color of [
+      "white",
+      "orange",
+      "magenta",
+      "light_blue",
+      "yellow",
+      "lime",
+      "pink",
+      "gray",
+      "light_gray",
+      "cyan",
+      "purple",
+      "blue",
+      "brown",
+      "green",
+      "red",
+      "black",
+    ]) {
+      expect(GRAVITY_BLOCKS).toContain(`minecraft:${color}_concrete_powder`);
+    }
     for (const name of GRAVITY_BLOCKS) {
       expect(GRAVITY_BLOCK_REPLACEMENTS[name]?.length).toBeGreaterThan(0);
+      expect(GRAVITY_BLOCK_REPLACEMENTS[name]!.map((option) => option.name)).toEqual([GREEN_STAINED_GLASS]);
+      // Nothing may fall back to a gravity block.
       expect(GRAVITY_BLOCKS).not.toContain(GRAVITY_BLOCK_REPLACEMENTS[name]![0]!.name);
     }
   });
