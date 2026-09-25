@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -37,7 +37,7 @@ jobs:
         run: bun run build:addon
 
       - name: Upload the .mcaddon
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SakuraUnderworldDimension
           path: dist/SakuraUnderworldDimension.mcaddon
