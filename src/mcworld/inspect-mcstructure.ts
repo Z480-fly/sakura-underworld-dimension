@@ -13,6 +13,8 @@ export interface McStructureSummary {
   origin: [number, number, number];
   indexLayerLengths: number[];
   paletteSize: number;
+  /** The block names in `palette.default.block_palette`. */
+  paletteNames: string[];
   entities: number;
   bytes: number;
 }
@@ -85,6 +87,7 @@ export function inspectMcStructure(buffer: Buffer): McStructureSummary {
     origin: [0, 0, 0],
     indexLayerLengths: [],
     paletteSize: 0,
+    paletteNames: [],
     entities: 0,
     bytes: buffer.length,
   };
@@ -163,7 +166,24 @@ export function inspectMcStructure(buffer: Buffer): McStructureSummary {
                   const count = c.buf.readInt32LE(c.pos);
                   c.pos += 4;
                   summary.paletteSize = count;
-                  for (let i = 0; i < count; i++) skipPayload(c, elementType);
+                  for (let i = 0; i < count; i++) {
+                    // List elements of a compound list are unnamed, so the entry's
+                    // own `name` member has to be walked to be read.
+                    if (elementType !== TAG.Compound) {
+                      skipPayload(c, elementType);
+                      continue;
+                    }
+                    for (;;) {
+                      const memberType = c.buf[c.pos++]!;
+                      if (memberType === TAG.End) break;
+                      const memberName = readString(c);
+                      if (memberName === "name" && memberType === TAG.String) {
+                        summary.paletteNames.push(readString(c));
+                        continue;
+                      }
+                      skipPayload(c, memberType);
+                    }
+                  }
                   continue;
                 }
                 skipPayload(c, defaultType);

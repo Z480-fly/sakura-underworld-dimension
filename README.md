@@ -32,7 +32,7 @@ dist/SakuraUnderworldDimension.mcaddon      (one ZIP, one folder per pack)
 │   ├── manifest.json                       data + script modules, depends on the RP
 │   ├── dimensions/underworld.json          sakura:underworld, void generator, y 0..127
 │   ├── biomes/underworld.json              custom biome with no spawn rules (no mobs)
-│   ├── items/enchanted_echo_shard.json     sakura:enchanted_echo_shard, glint, stack 1
+│   ├── items/enchanted_echo_shard.json     sakura:enchanted_echo_shard, glint, stack 1, off-hand
 │   ├── recipes/enchanted_echo_shard.json   echo shard + 4 amethyst shards
 │   ├── scripts/main.js                     shard behaviour + dimension filling
 │   ├── scripts/underworld-map.js           generated tile list + spawn point
@@ -59,8 +59,9 @@ So the build:
 3. cuts the realm into 64×64 footprint tiles (split vertically at 64 blocks) and writes one
    `.mcstructure` per tile, storing air as the format's "void" index so tiles only ever add
    blocks;
-4. records the tile list and the world's own spawn point in `scripts/underworld-map.js`;
-5. packs everything into the `.mcaddon` and verifies the result.
+4. writes falling blocks as a standing block instead - see below;
+5. records the tile list and the world's own spawn point in `scripts/underworld-map.js`;
+6. packs everything into the `.mcaddon` and verifies the result.
 
 At runtime the script places those tiles once, nearest the spawn first, and remembers which
 are done in a world dynamic property. Placed blocks live in the dimension's saved data, so
@@ -90,24 +91,46 @@ buried in gravel. The extraction therefore decodes with the generator's layout, 
 recovers **the world the generator meant to build**, and writes it out correctly. The chosen
 ordering is recorded in the build manifest and in `scripts/underworld-map.js`.
 
+### Every subchunk carries its own palette
+
+A subchunk stores block *indices* into a palette of block states, and that palette only holds the
+blocks that subchunk actually uses - so index 3 means different blocks in different subchunks. A
+cell therefore has to be resolved through the palette of the subchunk it came from; a per-tile
+index→block cache quietly renames whole rock layers (it resolved a later subchunk's index 3 with an
+earlier subchunk's palette entry). The tiles are resolved per subchunk, which is what makes the
+result match the source world block for block.
+
+### Falling blocks are written as black glass
+
+A structure is placed block by block, so a gravity block placed that way starts falling before the
+terrain that should hold it up exists. `minecraft:gravel` is 238 334 of the world's 4 029 593
+blocks and sits right through the island, so the first cut of the Underworld arrived with its
+gravel already dropped and left gaps behind.
+
+The extraction now writes every falling block as `minecraft:black_stained_glass`, with
+`minecraft:tinted_glass` mixed in - dark glass that belongs to the obsidian / deepslate / blackstone
+palette the world is already built from, and that cannot fall. The choice is made from the block's
+own coordinates, so the same world always produces byte-identical tiles. `src/pipeline/remap.ts`
+holds the table, and `bun run verify` fails the build if any falling block is still present.
+
 ## Enchanted Echo Shard
 
-`sakura:enchanted_echo_shard` — the vanilla echo shard icon with the enchantment glint,
-stack size 1, holdable in either hand. Crafted from one vanilla Echo Shard surrounded by four
-amethyst shards.
+`sakura:enchanted_echo_shard` — the vanilla echo shard icon with the enchantment glint, stack size
+1, and allowed in the off-hand slot (`minecraft:allow_off_hand`, which custom items have to opt into
+- without it the game refuses to place the item in that slot). Crafted from one vanilla Echo Shard
+surrounded by four amethyst shards.
 
 * **Outside the Underworld**, using it saves the player's dimension, exact XYZ and
   rotation, then moves them into the Underworld.
 * **Inside the Underworld**, using it puts them back in the saved dimension and location and
   restores pitch/yaw.
 * The saved location lives in a world dynamic property, so it survives closing and reopening
-  the world, and leaving and rejoining.
+  the world, and leaving and rejoining.It is *not* a Totem of Undying: no death-saving, no off-hand auto-trigger, and the vanilla
+Echo Shard is untouched. Carrying it in the off-hand is storage - moving to the Underworld is still
+the normal item-use action.
 
-It is *not* a Totem of Undying: no death-saving, no off-hand auto-trigger, and the vanilla
-Echo Shard is untouched.
-
-`/sakura:enter_underworld` does the same thing as a fallback if a build's item-use event does
-not fire from the off-hand.
+`/sakura:enter_underworld` does the same thing as a fallback if a build's item-use event does not
+fire at all.
 
 ## Requirements and caveats
 
@@ -155,6 +178,7 @@ src/mcworld/inspect-mcstructure.ts .mcstructure validator
 src/pipeline/fetch-source.ts      downloads the existing Underworld world
 src/pipeline/probe.ts             diagnostics for the subchunk ordering
 src/pipeline/extract-tiles.ts     world → structure tiles + runtime tile list
+src/pipeline/remap.ts             falling blocks → black glass
 src/pipeline/build-addon.ts       assembles the .mcaddon
 src/pipeline/verify.ts            proves the world is in the package
 src/runtime/main.ts               behavior pack script (shard + dimension filling)
@@ -174,13 +198,15 @@ the source world:
 [verify] source world: Z480-fly/unstable-underworld-bedrock/dist/Underworld-Simulator-Remastered.mcworld
 [verify]              sha256 c70c69b0a1ae8f69a8770db601034029f288935ab8b24490f5ec9777a1497b11
 [verify] subchunk ordering: generator
+[verify] 238334 falling minecraft:gravel written as minecraft:black_stained_glass / minecraft:tinted_glass
 [verify] 71 tiles, 4029593 blocks in 12660736 structure cells
-[verify] OK - 25 checks passed, the Underworld world is in the package
+[verify] OK - 27 checks passed, the Underworld world is in the package
 ```
 
-## Not verified
+## In-game status
 
-The package has not been opened on a device here. The build proves the world data is present
-and correctly encoded, but the in-game behaviour (custom dimension registration, structure
-placement performance on a phone, off-hand item use) still needs one round of testing in
-Minecraft itself.
+The pack has been run in Minecraft Bedrock on a phone with Beta APIs on: the dimension registers,
+the terrain arrives, the shard teleports both ways and the icon carries the enchantment glint.
+Two things that round turned up are fixed here - the gravel that fell out of the tiles while they
+loaded, and the item being refused by the off-hand slot - and they are the only behaviour that
+changed.

@@ -13,6 +13,7 @@ import { readFile } from "node:fs/promises";
 import { ADDON, PATHS } from "./config.ts";
 import type { ExtractManifest } from "./extract-tiles.ts";
 import { inspectMcStructure, structureCellCount } from "../mcworld/inspect-mcstructure.ts";
+import { GRAVITY_BLOCKS } from "./remap.ts";
 import { UNDERWORLD_TILES } from "../runtime/underworld-map.ts";
 import { readZip } from "../mcutil/zip.ts";
 
@@ -152,6 +153,11 @@ export async function verifyAddon(): Promise<void> {
     "item",
     "the item does not have the enchantment glint",
   );
+  report.check(
+    item?.["minecraft:item"]?.components?.["minecraft:allow_off_hand"] === true,
+    "item",
+    "the item cannot be placed in the off-hand slot",
+  );
 
   const textures = parseJson<{ texture_data?: Record<string, { textures?: string }> }>(
     report,
@@ -185,6 +191,7 @@ export async function verifyAddon(): Promise<void> {
     if (!runtimeIds.has(tile.id)) report.fail("script data", `${tile.id} is missing from the runtime module`);
   }
 
+  const gravityFound = new Set<string>();
   let verifiedBlocks = 0;
   let verifiedCells = 0;
   let missing = 0;
@@ -217,6 +224,7 @@ export async function verifyAddon(): Promise<void> {
       if (length !== cells) report.fail("structures", `${tile.file} has ${length} indices for ${cells} cells`);
     }
     if (summary.paletteSize === 0) report.fail("structures", `${tile.file} has an empty block palette`);
+    for (const name of summary.paletteNames) if (GRAVITY_BLOCKS.includes(name)) gravityFound.add(name);
     if (summary.origin[0] !== tile.x || summary.origin[1] !== tile.y || summary.origin[2] !== tile.z) {
       report.fail(
         "structures",
@@ -237,6 +245,11 @@ export async function verifyAddon(): Promise<void> {
     "world",
     `the tiles cover ${verifiedCells} cells, fewer than the ${manifest.totals.blocks} blocks they contain`,
   );
+  report.check(
+    gravityFound.size === 0,
+    "structures",
+    `the tiles still hold falling blocks, which would drop out of the terrain: ${[...gravityFound].join(", ")}`,
+  );
 
   // ---- summary -------------------------------------------------------------
   console.log(`[verify] source world: ${manifest.source.repository}/${manifest.source.path}`);
@@ -245,6 +258,9 @@ export async function verifyAddon(): Promise<void> {
   console.log(`[verify] subchunk ordering: ${manifest.order}`);
   console.log(`[verify] realm ${manifest.realm.minX}..${manifest.realm.maxX} x ${manifest.realm.minZ}..${manifest.realm.maxZ}`);
   console.log(`[verify] spawn ${JSON.stringify(manifest.spawn)}`);
+  for (const remap of manifest.remap) {
+    console.log(`[verify] ${remap.blocks} falling ${remap.from} written as ${remap.to.join(" / ")}`);
+  }
   console.log(
     `[verify] ${manifest.totals.tiles} tiles, ${verifiedBlocks} blocks in ${verifiedCells} structure cells`,
   );
